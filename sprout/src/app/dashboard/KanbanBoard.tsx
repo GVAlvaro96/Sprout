@@ -10,6 +10,7 @@ type Project = {
   description: string
   status: string
   stack: string[]
+  template?: string // <--- ¡Añadir esta línea!
 }
 
 type UserProps = {
@@ -33,19 +34,18 @@ export default function KanbanBoard({
   user: UserProps 
 }) {
   const [projects, setProjects] = useState<Project[]>(initialProjects)
-  
-  // Estado para controlar si estamos editando un proyecto (abre el Modal)
   const [editingProject, setEditingProject] = useState<Project | null>(null)
+  
+  // Nuevo estado para saber qué tarjeta está creando un repo
+  const [isCreatingRepo, setIsCreatingRepo] = useState<string | null>(null)
   
   const router = useRouter()
 
-  // --- LÓGICA DE SESIÓN ---
   const handleSignOut = async () => {
     await supabase.auth.signOut()
-    router.push('/')
+    router.push('/login')
   }
 
-  // --- LÓGICA DE DRAG & DROP ---
   const handleDragStart = (e: React.DragEvent, projectId: string) => {
     e.dataTransfer.setData('projectId', projectId)
   }
@@ -62,59 +62,63 @@ export default function KanbanBoard({
       p.id === projectId ? { ...p, status: newStatus } : p
     ))
 
-    const { error } = await supabase
-      .from('projects')
-      .update({ status: newStatus })
-      .eq('id', projectId)
-
-    if (error) console.error("Error actualizando estado:", error)
+    await supabase.from('projects').update({ status: newStatus }).eq('id', projectId)
   }
 
-  // --- LÓGICA DE BORRADO (DELETE) ---
   const handleDelete = async (projectId: string) => {
-    // Pedimos confirmación nativa para evitar borrados por accidente
     if (!window.confirm('¿Seguro que quieres borrar esta idea de Sprout?')) return
-
-    // 1. Borrado optimista en la UI
     setProjects(prev => prev.filter(p => p.id !== projectId))
-
-    // 2. Borrado real en base de datos
-    const { error } = await supabase
-      .from('projects')
-      .delete()
-      .eq('id', projectId)
-
-    if (error) console.error("Error al borrar:", error)
+    await supabase.from('projects').delete().eq('id', projectId)
   }
 
-  // --- LÓGICA DE EDICIÓN (UPDATE) ---
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editingProject) return
 
-    // 1. Actualización optimista en la UI
     setProjects(prev => prev.map(p => p.id === editingProject.id ? editingProject : p))
-
-    // 2. Actualización real en base de datos
-    const { error } = await supabase
-      .from('projects')
-      .update({
-        title: editingProject.title,
-        description: editingProject.description,
-        stack: editingProject.stack
-      })
-      .eq('id', editingProject.id)
-
-    if (error) console.error("Error al actualizar:", error)
+    await supabase.from('projects').update({
+      title: editingProject.title,
+      description: editingProject.description,
+      stack: editingProject.stack
+    }).eq('id', editingProject.id)
     
-    // 3. Cerramos el modal
     setEditingProject(null)
+  }
+
+  // --- LA MAGIA DE GITHUB ---
+  
+  const handleCreateRepo = async (project: Project) => {
+    try {
+      setIsCreatingRepo(project.id)
+      
+      const response = await fetch('/api/github/create-repo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          title: project.title, 
+          description: project.description,
+          stack: project.stack,
+          template: project.template || 'vacio' // <--- ¡Añadir esta línea!
+        }),
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Error desconocido al crear el repo')
+      }
+
+      // Si va bien, abrimos el repo en una nueva pestaña
+      window.open(data.repoUrl, '_blank')
+      
+    } catch (error: any) {
+      alert(`Error: ${error.message}`)
+    } finally {
+      setIsCreatingRepo(null) // Quitamos el estado de carga
+    }
   }
 
   return (
     <main className="min-h-screen bg-gray-50 p-4 md:p-8 relative">
-      
-      {/* Cabecera */}
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
         <div className="flex items-center gap-3">
           {user.avatar && (
@@ -127,82 +131,53 @@ export default function KanbanBoard({
         </div>
         
         <div className="flex items-center gap-3">
-          <button 
-            onClick={handleSignOut}
-            className="text-gray-500 hover:text-red-600 text-sm font-medium transition-colors px-3 py-2"
-          >
+          <button onClick={handleSignOut} className="text-gray-500 hover:text-red-600 text-sm font-medium transition-colors px-3 py-2">
             Cerrar sesión
           </button>
-          <button 
-            onClick={() => router.push('/seed')}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors text-center"
-          >
+          <button onClick={() => router.push('/seed')} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors text-center">
             + Nueva Idea
           </button>
         </div>
       </div>
       
-      {/* Tablero Kanban */}
       <div className="flex gap-6 overflow-x-auto pb-4 snap-x">
         {COLUMNS.map((col) => {
           const columnProjects = projects.filter((p) => p.status === col.id)
 
           return (
-            <div 
-              key={col.id} 
-              className="min-w-[280px] w-[280px] shrink-0 bg-gray-200/50 rounded-xl p-4 snap-center"
-              onDragOver={handleDragOver}
-              onDrop={(e) => handleDrop(e, col.id)}
-            >
+            <div key={col.id} className="min-w-[280px] w-[280px] shrink-0 bg-gray-200/50 rounded-xl p-4 snap-center" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, col.id)}>
               <h2 className="font-semibold text-gray-700 mb-4 flex justify-between items-center">
                 {col.title}
-                <span className="bg-gray-300 text-gray-700 px-2 py-0.5 rounded-full text-xs font-bold">
-                  {columnProjects.length}
-                </span>
+                <span className="bg-gray-300 text-gray-700 px-2 py-0.5 rounded-full text-xs font-bold">{columnProjects.length}</span>
               </h2>
               
               <div className="space-y-4 min-h-[100px]">
                 {columnProjects.map((project: Project) => (
-                  <div 
-                    key={project.id} 
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, project.id)}
-                    className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow group"
-                  >
+                  <div key={project.id} draggable onDragStart={(e) => handleDragStart(e, project.id)} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow group">
                     <div className="flex justify-between items-start mb-2">
                       <h3 className="font-bold text-gray-900 leading-tight">{project.title}</h3>
                       
-                      {/* Botones de acción (visibles al pasar el ratón o en móvil siempre) */}
+                      {/* Botones de acción actualizados */}
                       <div className="flex gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                         <button 
-                          onClick={() => setEditingProject(project)}
-                          className="text-gray-400 hover:text-blue-600 p-1"
-                          title="Editar"
+                          onClick={() => handleCreateRepo(project)}
+                          disabled={isCreatingRepo === project.id}
+                          className="text-gray-400 hover:text-black p-1 disabled:opacity-50"
+                          title="Crear Repositorio en GitHub"
                         >
-                          ✏️
+                          {isCreatingRepo === project.id ? '⏳' : '🐙'}
                         </button>
-                        <button 
-                          onClick={() => handleDelete(project.id)}
-                          className="text-gray-400 hover:text-red-600 p-1"
-                          title="Borrar"
-                        >
-                          🗑️
-                        </button>
+                        <button onClick={() => setEditingProject(project)} className="text-gray-400 hover:text-blue-600 p-1" title="Editar">✏️</button>
+                        <button onClick={() => handleDelete(project.id)} className="text-gray-400 hover:text-red-600 p-1" title="Borrar">🗑️</button>
                       </div>
                     </div>
                     
-                    {project.description && (
-                      <p className="text-sm text-gray-500 mt-1 line-clamp-3">
-                        {project.description}
-                      </p>
-                    )}
+                    {project.description && <p className="text-sm text-gray-500 mt-1 line-clamp-3">{project.description}</p>}
                     
                     {project.stack && project.stack.length > 0 && (
                       <div className="flex flex-wrap gap-2 mt-3">
                         {project.stack.map((tech, idx) => (
-                          <span key={idx} className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-md font-medium">
-                            {tech}
-                          </span>
+                          <span key={idx} className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-md font-medium">{tech}</span>
                         ))}
                       </div>
                     )}
@@ -214,71 +189,35 @@ export default function KanbanBoard({
         })}
       </div>
 
-      {/* MODAL DE EDICIÓN (Ventana flotante) */}
+      {/* MODAL DE EDICIÓN */}
       {editingProject && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-gray-900">Editar Idea</h2>
-              <button onClick={() => setEditingProject(null)} className="text-gray-500 hover:text-gray-800">
-                ✕
-              </button>
+              <button onClick={() => setEditingProject(null)} className="text-gray-500 hover:text-gray-800">✕</button>
             </div>
-
             <form onSubmit={handleEditSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Título</label>
-                <input 
-                  type="text" required
-                  className="w-full bg-white text-gray-900 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none"
-                  value={editingProject.title}
-                  onChange={(e) => setEditingProject({...editingProject, title: e.target.value})}
-                />
+                <input type="text" required className="w-full bg-white text-gray-900 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none" value={editingProject.title} onChange={(e) => setEditingProject({...editingProject, title: e.target.value})} />
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
-                <textarea 
-                  rows={3}
-                  className="w-full bg-white text-gray-900 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none"
-                  value={editingProject.description}
-                  onChange={(e) => setEditingProject({...editingProject, description: e.target.value})}
-                />
+                <textarea rows={3} className="w-full bg-white text-gray-900 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none" value={editingProject.description} onChange={(e) => setEditingProject({...editingProject, description: e.target.value})} />
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Stack (comas)</label>
-                <input 
-                  type="text" 
-                  className="w-full bg-white text-gray-900 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none"
-                  value={editingProject.stack.join(', ')}
-                  onChange={(e) => {
-                    const stackArray = e.target.value.split(',').map(s => s.trim()).filter(Boolean)
-                    setEditingProject({...editingProject, stack: stackArray})
-                  }}
-                />
+                <input type="text" className="w-full bg-white text-gray-900 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none" value={editingProject.stack.join(', ')} onChange={(e) => { const stackArray = e.target.value.split(',').map(s => s.trim()).filter(Boolean); setEditingProject({...editingProject, stack: stackArray}) }} />
               </div>
-
               <div className="flex gap-3 pt-4">
-                <button 
-                  type="button"
-                  onClick={() => setEditingProject(null)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit"
-                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
-                >
-                  Guardar Cambios
-                </button>
+                <button type="button" onClick={() => setEditingProject(null)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Cancelar</button>
+                <button type="submit" className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium">Guardar Cambios</button>
               </div>
             </form>
           </div>
         </div>
       )}
-
     </main>
   )
 }

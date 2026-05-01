@@ -8,13 +8,14 @@ export default function NuevaIdea() {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [stackInput, setStackInput] = useState('')
+  // Nuevo estado para el template
+  const [template, setTemplate] = useState('vacio') 
   
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [mensaje, setMensaje] = useState({ texto: '', tipo: '' })
   
   const router = useRouter()
 
-  // Verificación de seguridad proactiva
   useEffect(() => {
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -30,7 +31,6 @@ export default function NuevaIdea() {
     setIsSubmitting(true)
     setMensaje({ texto: '', tipo: '' })
     
-    // Obtenemos el usuario de la sesión actual
     const { data: { user }, error: userError } = await supabase.auth.getUser()
     
     if (userError || !user) {
@@ -41,7 +41,7 @@ export default function NuevaIdea() {
 
     const stackArray = stackInput.split(',').map(tech => tech.trim()).filter(Boolean)
 
-    // INSERT en Supabase
+    // Ahora guardamos también el 'template' en Supabase
     const { error: insertError } = await supabase
       .from('projects')
       .insert([
@@ -49,6 +49,7 @@ export default function NuevaIdea() {
           title,
           description,
           stack: stackArray,
+          template: template, // <--- Aquí guardamos la plantilla elegida
           status: 'idea',
           user_id: user.id 
         }
@@ -60,9 +61,6 @@ export default function NuevaIdea() {
       setIsSubmitting(false)
     } else {
       setMensaje({ texto: '✅ ¡Idea plantada! Redirigiendo...', tipo: 'exito' })
-      
-      // Limpiamos caché y redirigimos
-      // Usamos un pequeño timeout para asegurar que el estado se procesa
       setTimeout(() => {
         router.refresh()
         router.push('/dashboard')
@@ -78,10 +76,7 @@ export default function NuevaIdea() {
           <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
             🌱 Nueva Idea
           </h1>
-          <button 
-            onClick={() => router.push('/dashboard')}
-            className="text-gray-400 hover:text-gray-600 text-sm"
-          >
+          <button onClick={() => router.push('/dashboard')} className="text-gray-400 hover:text-gray-600 text-sm">
             Cancelar
           </button>
         </div>
@@ -98,44 +93,46 @@ export default function NuevaIdea() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Título del Proyecto</label>
             <input 
-              type="text" 
-              required
-              placeholder="Ej: Mi próximo SaaS"
+              type="text" required placeholder="Ej: Mi próximo SaaS"
               className="w-full bg-white text-gray-900 border border-gray-200 rounded-lg p-3 focus:ring-2 focus:ring-green-500 outline-none transition-all"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              value={title} onChange={(e) => setTitle(e.target.value)}
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
             <textarea 
-              rows={4}
-              placeholder="¿Qué vas a construir?"
+              rows={4} placeholder="¿Qué vas a construir?"
               className="w-full bg-white text-gray-900 border border-gray-200 rounded-lg p-3 focus:ring-2 focus:ring-green-500 outline-none transition-all"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              value={description} onChange={(e) => setDescription(e.target.value)}
             />
           </div>
 
+          {/* NUEVO CAMPO: Selector de Template */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Stack (comas)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Estructura Base (Template)</label>
+            <select className="w-full bg-white text-gray-900 border border-gray-200 rounded-lg p-3..."
+            value={template} onChange={(e) => setTemplate(e.target.value)}>
+              <option value="vacio">Repositorio Vacío (Solo README)</option>
+              <option value="sprout-nextjs-template">Next.js App Router + Tailwind</option>
+              <option value="sprout-react-vite-template">React + Vite + TypeScript</option>
+              <option value="sprout-fastapi-template">FastAPI (Python) Esqueleto</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Stack extra (comas)</label>
             <input 
-              type="text" 
-              placeholder="React, Tailwind, Go..."
+              type="text" placeholder="Stripe, Supabase, Tailwind..."
               className="w-full bg-white text-gray-900 border border-gray-200 rounded-lg p-3 focus:ring-2 focus:ring-green-500 outline-none transition-all"
-              value={stackInput}
-              onChange={(e) => setStackInput(e.target.value)}
+              value={stackInput} onChange={(e) => setStackInput(e.target.value)}
             />
           </div>
 
           <button 
-            type="submit" 
-            disabled={isSubmitting}
+            type="submit" disabled={isSubmitting}
             className={`w-full text-white font-bold py-4 rounded-xl shadow-lg transition-all ${
-              isSubmitting 
-                ? 'bg-gray-300 cursor-not-allowed' 
-                : 'bg-green-600 hover:bg-green-700 hover:-translate-y-0.5'
+              isSubmitting ? 'bg-gray-300 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 hover:-translate-y-0.5'
             }`}
           >
             {isSubmitting ? 'Guardando...' : 'Guardar Idea en Sprout'}
