@@ -5,7 +5,7 @@ import { cookies } from 'next/headers'
 
 // Inicializamos Stripe con tu clave secreta
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-04-10', // O la versión más reciente
+    apiVersion: '2026-04-22.dahlia' as any,
 })
 
 export async function POST() {
