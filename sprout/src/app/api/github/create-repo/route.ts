@@ -5,14 +5,13 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export async function POST(request: Request) {
   try {
-    // 1. Recibimos también el campo "template"
     const { title, description, stack, template } = await request.json()
 
     if (!title) {
       return NextResponse.json({ error: 'El título es obligatorio' }, { status: 400 })
     }
 
-    // 2. Verificación de Seguridad
+    // 1. Identificar al usuario logueado
     const cookieStore = await cookies()
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,20 +21,32 @@ export async function POST(request: Request) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const githubToken = process.env.GITHUB_PAT
-    if (!githubToken) return NextResponse.json({ error: 'Falta el Token de GitHub' }, { status: 500 })
+    // 2. EXTRAER LAS CLAVES DESDE LA BBDD (Modelo BYOK)
+    const { data: settings, error: settingsError } = await supabase
+      .from('user_settings')
+      .select('github_token, gemini_api_key')
+      .single()
+
+    if (settingsError || !settings?.github_token || !settings?.gemini_api_key) {
+      return NextResponse.json({ 
+        error: 'Faltan las API Keys. Por favor, ve a Configuración y guarda tus claves de GitHub y Gemini.' 
+      }, { status: 400 })
+    }
+
+    const githubToken = settings.github_token
+    const geminiApiKey = settings.gemini_api_key
     const repoName = title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')
 
-    // 3. Obtener usuario de GitHub (para la URL de la plantilla)
+    // 3. Obtener usuario de GitHub
     const userRes = await fetch('https://api.github.com/user', {
       headers: { 'Authorization': `token ${githubToken}` }
     })
     const githubUser = await userRes.json()
 
     // ------------------------------------------------------------------
-    // 🧠 4. LA MAGIA DE LA IA (Gemini 2.0 Flash)
+    // 🧠 4. LA MAGIA DE LA IA (Con el prompt detallado)
     // ------------------------------------------------------------------
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+    const genAI = new GoogleGenerativeAI(geminiApiKey)
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
     const prompt = `
@@ -65,12 +76,11 @@ export async function POST(request: Request) {
     let repoData;
 
     if (template && template !== 'vacio') {
-      // OPCIÓN A: Generar desde plantilla de GitHub
       createRepoRes = await fetch(`https://api.github.com/repos/${githubUser.login}/${template}/generate`, {
         method: 'POST',
         headers: {
           'Authorization': `token ${githubToken}`,
-          'Accept': 'application/vnd.github+json', // Cabecera especial para plantillas
+          'Accept': 'application/vnd.github+json',
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -80,7 +90,6 @@ export async function POST(request: Request) {
         }),
       })
     } else {
-      // OPCIÓN B: Crear repositorio completamente vacío
       createRepoRes = await fetch('https://api.github.com/user/repos', {
         method: 'POST',
         headers: {
@@ -107,13 +116,12 @@ export async function POST(request: Request) {
     // ⏳ 6. PAUSA E INYECCIÓN DEL README
     // ------------------------------------------------------------------
     if (template && template !== 'vacio') {
-       // Le damos 2 segundos a GitHub para que termine de copiar todos los archivos de tu plantilla
-       await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 5000));
     }
 
     const readmeBase64 = Buffer.from(readmeMarkdown).toString('base64')
 
-    await fetch(`https://api.github.com/repos/${githubUser.login}/${repoName}/contents/README.md`, {
+    const readmeRes = await fetch(`https://api.github.com/repos/${githubUser.login}/${repoName}/contents/README.md`, {
       method: 'PUT',
       headers: {
         'Authorization': `token ${githubToken}`,
@@ -126,8 +134,13 @@ export async function POST(request: Request) {
       }),
     })
 
-    return NextResponse.json({ success: true, repoUrl: repoData.html_url })
+    if (!readmeRes.ok) {
+      const readmeError = await readmeRes.json();
+      console.error('⚠️ El repositorio se creó, pero GitHub rechazó el README:', readmeError);
+    }
 
+    return NextResponse.json({ success: true, repoUrl: repoData.html_url })
+    
   } catch (error: any) {
     console.error('Error en API:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
