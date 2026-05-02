@@ -6,13 +6,13 @@ export default function Login() {
   
   // Función que se ejecuta al hacer clic en el botón
  const handleGitHubLogin = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'github',
-      options: {
-        // En vez de ir al dashboard, pasamos por el callback pidiéndole que luego nos lleve al dashboard
-        redirectTo: `${window.location.origin}/auth/callback?next=/dashboard` 
-      }
-    })
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'github',
+    options: {
+      // Usamos la URL de Render si existe, si no, caemos en el origin del navegador
+      redirectTo: `${process.env.NEXT_PUBLIC_BASE_URL || window.location.origin}/auth/callback?next=/dashboard` 
+    }
+  })
 
     if (error) {
       console.error('Error al iniciar sesión:', error.message)
