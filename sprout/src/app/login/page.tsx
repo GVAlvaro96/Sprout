@@ -10,8 +10,8 @@ export default function Login() {
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'github',
     options: {
-      // Usamos la URL de Render si existe, si no, caemos en el origin del navegador
-      redirectTo: `${process.env.NEXT_PUBLIC_BASE_URL || window.location.origin}/auth/callback?next=/dashboard` 
+      // Usamos la URL configurada o caemos en el origin del navegador
+      redirectTo: `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/auth/callback?next=/dashboard` 
     }
   })
 
