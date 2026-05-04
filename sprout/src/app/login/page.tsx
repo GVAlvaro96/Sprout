@@ -1,6 +1,7 @@
 'use client'
 
-import { supabase } from '../../lib/supabase'
+import { supabase } from '@/lib/supabase'
+import Link from 'next/link'
 
 export default function Login() {
   
@@ -23,7 +24,9 @@ export default function Login() {
     <main className="min-h-screen bg-gray-50 flex flex-col justify-center items-center p-4">
       <div className="max-w-md w-full bg-white rounded-xl shadow-sm p-8 text-center border border-gray-100">
         
-        <h1 className="text-4xl font-bold text-gray-900 mb-2">🌱 Sprout</h1>
+        <Link href="/" className="hover:opacity-80 transition-opacity">
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">🌱 Sprout</h1>
+        </Link>
         <p className="text-gray-500 mb-8">La incubadora para tus ideas de código</p>
 
         <button

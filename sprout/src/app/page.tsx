@@ -18,10 +18,10 @@ export default async function LandingPage() {
     <div className="min-h-screen bg-white text-gray-900 font-sans">
       {/* NAVBAR */}
       <nav className="flex items-center justify-between px-6 py-4 border-b border-gray-100 max-w-7xl mx-auto w-full">
-        <div className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <span className="text-2xl">🌱</span>
           <span className="text-xl font-bold tracking-tight text-green-700">Sprout</span>
-        </div>
+        </Link>
         
         <div>
           {user ? (

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 type Task = {
   id: string
@@ -161,7 +162,9 @@ export default function KanbanBoard({
             <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full border border-gray-200" />
           )}
           <div>
-            <h1 className="text-xl font-bold text-gray-900 leading-none">Sprout de {user.name} 🌱</h1>
+            <Link href="/" className="hover:opacity-80 transition-opacity">
+              <h1 className="text-xl font-bold text-gray-900 leading-none">Sprout de {user.name} 🌱</h1>
+            </Link>
             <p className="text-xs text-gray-500 mt-1">Sesión activa vía GitHub</p>
           </div>
         </div>
