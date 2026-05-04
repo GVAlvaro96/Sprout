@@ -3,13 +3,12 @@ import Stripe from 'stripe'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
-// Inicializamos Stripe con tu clave secreta
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2026-04-22.dahlia' as any,
-})
-
 export async function POST() {
   try {
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+      apiVersion: '2026-04-22.dahlia' as any,
+    })
+    
     // 1. Identificar al usuario en Supabase
     const cookieStore = await cookies()
     const supabase = createServerClient(
