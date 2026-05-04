@@ -4,13 +4,20 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 
+type Task = {
+  id: string
+  text: string
+  completed: boolean
+}
+
 type Project = {
   id: string
   title: string
   description: string
   status: string
   stack: string[]
-  template?: string // <--- ¡Añadir esta línea!
+  template?: string
+  tasks?: Task[]
 }
 
 type UserProps = {
@@ -35,9 +42,8 @@ export default function KanbanBoard({
 }) {
   const [projects, setProjects] = useState<Project[]>(initialProjects)
   const [editingProject, setEditingProject] = useState<Project | null>(null)
-  
-  // Nuevo estado para saber qué tarjeta está creando un repo
   const [isCreatingRepo, setIsCreatingRepo] = useState<string | null>(null)
+  const [newTaskText, setNewTaskText] = useState('')
   
   const router = useRouter()
 
@@ -79,14 +85,45 @@ export default function KanbanBoard({
     await supabase.from('projects').update({
       title: editingProject.title,
       description: editingProject.description,
-      stack: editingProject.stack
+      stack: editingProject.stack,
+      tasks: editingProject.tasks
     }).eq('id', editingProject.id)
     
     setEditingProject(null)
   }
 
-  // --- LA MAGIA DE GITHUB ---
-  
+  const handleAddTask = () => {
+    if (!editingProject || !newTaskText.trim()) return
+    const newTask: Task = {
+      id: Date.now().toString(),
+      text: newTaskText.trim(),
+      completed: false
+    }
+    setEditingProject({
+      ...editingProject,
+      tasks: [...(editingProject.tasks || []), newTask]
+    })
+    setNewTaskText('')
+  }
+
+  const handleToggleTask = (taskId: string) => {
+    if (!editingProject) return
+    setEditingProject({
+      ...editingProject,
+      tasks: editingProject.tasks?.map(t => 
+        t.id === taskId ? { ...t, completed: !t.completed } : t
+      )
+    })
+  }
+
+  const handleDeleteTask = (taskId: string) => {
+    if (!editingProject) return
+    setEditingProject({
+      ...editingProject,
+      tasks: editingProject.tasks?.filter(t => t.id !== taskId)
+    })
+  }
+
   const handleCreateRepo = async (project: Project) => {
     try {
       setIsCreatingRepo(project.id)
@@ -98,7 +135,7 @@ export default function KanbanBoard({
           title: project.title, 
           description: project.description,
           stack: project.stack,
-          template: project.template || 'vacio' // <--- ¡Añadir esta línea!
+          template: project.template || 'vacio'
         }),
       })
       const data = await response.json()
@@ -107,13 +144,12 @@ export default function KanbanBoard({
         throw new Error(data.error || 'Error desconocido al crear el repo')
       }
 
-      // Si va bien, abrimos el repo en una nueva pestaña
       window.open(data.repoUrl, '_blank')
       
     } catch (error: any) {
       alert(`Error: ${error.message}`)
     } finally {
-      setIsCreatingRepo(null) // Quitamos el estado de carga
+      setIsCreatingRepo(null)
     }
   }
 
@@ -157,7 +193,6 @@ export default function KanbanBoard({
                     <div className="flex justify-between items-start mb-2">
                       <h3 className="font-bold text-gray-900 leading-tight">{project.title}</h3>
                       
-                      {/* Botones de acción actualizados */}
                       <div className="flex gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                         <button 
                           onClick={() => handleCreateRepo(project)}
@@ -181,6 +216,14 @@ export default function KanbanBoard({
                         ))}
                       </div>
                     )}
+
+                    {project.tasks && project.tasks.length > 0 && (
+                      <div className="mt-3 flex items-center gap-2 text-xs text-gray-400">
+                        <span className="bg-gray-100 px-2 py-0.5 rounded">
+                          {project.tasks.filter(t => t.completed).length}/{project.tasks.length} tareas
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -189,30 +232,168 @@ export default function KanbanBoard({
         })}
       </div>
 
-      {/* MODAL DE EDICIÓN */}
+      {/* MODAL DE EDICIÓN TIPO JIRA */}
       {editingProject && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-900">Editar Idea</h2>
-              <button onClick={() => setEditingProject(null)} className="text-gray-500 hover:text-gray-800">✕</button>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl my-8">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className={`px-3 py-1 rounded-full text-xs font-bold ${
+                  editingProject.status === 'idea' ? 'bg-yellow-100 text-yellow-800' :
+                  editingProject.status === 'esqueleto_montado' ? 'bg-blue-100 text-blue-800' :
+                  editingProject.status === 'en_desarrollo' ? 'bg-purple-100 text-purple-800' :
+                  editingProject.status === 'en_pruebas' ? 'bg-orange-100 text-orange-800' :
+                  'bg-green-100 text-green-800'
+                }`}>
+                  {COLUMNS.find(c => c.id === editingProject.status)?.title}
+                </div>
+                <span className="text-gray-400 text-sm">编辑</span>
+              </div>
+              <button onClick={() => setEditingProject(null)} className="text-gray-400 hover:text-gray-600 text-2xl">✕</button>
             </div>
-            <form onSubmit={handleEditSubmit} className="space-y-4">
+
+            <form onSubmit={handleEditSubmit} className="p-6 space-y-6">
+              {/* Título */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Título</label>
-                <input type="text" required className="w-full bg-white text-gray-900 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none" value={editingProject.title} onChange={(e) => setEditingProject({...editingProject, title: e.target.value})} />
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Título</label>
+                <input 
+                  type="text" 
+                  required 
+                  className="w-full bg-white text-gray-900 border border-gray-200 rounded-lg p-3 focus:ring-2 focus:ring-green-500 outline-none text-lg font-medium"
+                  value={editingProject.title} 
+                  onChange={(e) => setEditingProject({...editingProject, title: e.target.value})} 
+                />
               </div>
+
+              {/* Estado */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
-                <textarea rows={3} className="w-full bg-white text-gray-900 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none" value={editingProject.description} onChange={(e) => setEditingProject({...editingProject, description: e.target.value})} />
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Estado</label>
+                <div className="flex flex-wrap gap-2">
+                  {COLUMNS.map(col => (
+                    <button
+                      key={col.id}
+                      type="button"
+                      onClick={() => setEditingProject({...editingProject, status: col.id})}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                        editingProject.status === col.id 
+                          ? 'bg-green-600 text-white' 
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {col.title}
+                    </button>
+                  ))}
+                </div>
               </div>
+
+              {/* Descripción */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Stack (comas)</label>
-                <input type="text" className="w-full bg-white text-gray-900 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none" value={editingProject.stack.join(', ')} onChange={(e) => { const stackArray = e.target.value.split(',').map(s => s.trim()).filter(Boolean); setEditingProject({...editingProject, stack: stackArray}) }} />
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Descripción</label>
+                <textarea 
+                  rows={4}
+                  className="w-full bg-white text-gray-900 border border-gray-200 rounded-lg p-3 focus:ring-2 focus:ring-green-500 outline-none text-sm"
+                  placeholder="Describe tu proyecto, objetivos, funcionalidad..."
+                  value={editingProject.description} 
+                  onChange={(e) => setEditingProject({...editingProject, description: e.target.value})} 
+                />
               </div>
-              <div className="flex gap-3 pt-4">
-                <button type="button" onClick={() => setEditingProject(null)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Cancelar</button>
-                <button type="submit" className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium">Guardar Cambios</button>
+
+              {/* Stack */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Stack Tecnológico</label>
+                <input 
+                  type="text" 
+                  className="w-full bg-white text-gray-900 border border-gray-200 rounded-lg p-3 focus:ring-2 focus:ring-green-500 outline-none text-sm"
+                  placeholder="React, TypeScript, Node.js, PostgreSQL..."
+                  value={editingProject.stack.join(', ')} 
+                  onChange={(e) => { 
+                    const stackArray = e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+                    setEditingProject({...editingProject, stack: stackArray})
+                  }} 
+                />
+                {editingProject.stack.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {editingProject.stack.map((tech, idx) => (
+                      <span key={idx} className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-md font-medium">
+                        {tech}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Tareas/Requisitos */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Tareas / Requisitos
+                  <span className="text-gray-400 font-normal ml-2">({editingProject.tasks?.length || 0})</span>
+                </label>
+                
+                {/* Lista de tareas */}
+                <div className="space-y-2 mb-3">
+                  {editingProject.tasks?.map((task, idx) => (
+                    <div key={task.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg group">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleTask(task.id)}
+                        className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                          task.completed 
+                            ? 'bg-green-500 border-green-500 text-white' 
+                            : 'border-gray-300 hover:border-green-400'
+                        }`}
+                      >
+                        {task.completed && '✓'}
+                      </button>
+                      <span className={`flex-1 text-sm ${task.completed ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+                        {task.text}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteTask(task.id)}
+                        className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 text-sm px-2"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Añadir tarea */}
+                <div className="flex gap-2">
+                  <input 
+                    type="text"
+                    className="flex-1 bg-white text-gray-900 border border-gray-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                    placeholder="Añadir tarea o requisito..."
+                    value={newTaskText}
+                    onChange={(e) => setNewTaskText(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTask())}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddTask}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Añadir
+                  </button>
+                </div>
+              </div>
+
+              {/* Acciones */}
+              <div className="flex gap-3 pt-4 border-t border-gray-100">
+                <button 
+                  type="button" 
+                  onClick={() => setEditingProject(null)}
+                  className="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
+                >
+                  Guardar Cambios
+                </button>
               </div>
             </form>
           </div>
