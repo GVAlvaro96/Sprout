@@ -5,10 +5,13 @@ import { NextResponse } from 'next/server'
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
-  const next = searchParams.get('next') ?? '/dashboard'
+  let next = searchParams.get('next') ?? '/dashboard'
 
-  // 1. Obtenemos la URL base real (Render o localhost)
-  // Evitamos que use el puerto 10000 interno
+  // Validar que next es una ruta interna (evitar open redirect)
+  if (next.startsWith('http') || next.startsWith('//') || !next.startsWith('/')) {
+    next = '/dashboard'
+  }
+
   const origin = process.env.NEXT_PUBLIC_BASE_URL || new URL(request.url).origin
 
   if (code) {

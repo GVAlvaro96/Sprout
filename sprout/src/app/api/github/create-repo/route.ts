@@ -7,8 +7,17 @@ export async function POST(request: Request) {
   try {
     const { title, description, stack, template } = await request.json()
 
-    if (!title) {
+    // Validación de entrada
+    if (!title || typeof title !== 'string' || title.trim().length === 0) {
       return NextResponse.json({ error: 'El título es obligatorio' }, { status: 400 })
+    }
+
+    if (title.length > 100) {
+      return NextResponse.json({ error: 'El título no puede exceder 100 caracteres' }, { status: 400 })
+    }
+
+    if (description && description.length > 5000) {
+      return NextResponse.json({ error: 'La descripción es demasiado larga' }, { status: 400 })
     }
 
     // 1. Identificar al usuario logueado
@@ -142,7 +151,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, repoUrl: repoData.html_url })
     
   } catch (error: any) {
-    console.error('Error en API:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error('Error en create-repo API:', error)
+    // No exponer detalles del error al cliente
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
   }
 }
