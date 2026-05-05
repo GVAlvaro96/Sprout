@@ -11,7 +11,7 @@ export default function Login() {
     provider: 'github',
     options: {
       // Usamos la URL configurada o caemos en el origin del navegador
-      redirectTo: `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/auth/callback?next=/dashboard` 
+      redirectTo: `${process.env.NEXT_PUBLIC_BASE_URL}/auth/callback?next=/dashboard` 
     }
   })
 
