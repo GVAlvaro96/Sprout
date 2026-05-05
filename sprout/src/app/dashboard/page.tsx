@@ -1,7 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import Link from 'next/link'
-import Image from 'next/image'
 import KanbanBoard from './KanbanBoard'
 import { Suspense } from 'react'
 
@@ -115,23 +114,6 @@ export default async function Dashboard() {
                   <span className="hidden sm:inline">Subir a Pro</span>
                 </Link>
               )}
-
-              {/* Avatar */}
-              <div className="w-8 h-8 rounded-full overflow-hidden ring-2 ring-gray-100">
-                {user.avatar ? (
-                  <Image 
-                    src={user.avatar} 
-                    alt={user.name} 
-                    width={32} 
-                    height={32}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-green-100 flex items-center justify-center text-green-700 text-sm font-bold">
-                    {user.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         </div>

@@ -229,7 +229,7 @@ export default function KanbanBoard({
                     {project.tasks && project.tasks.length > 0 && (
                       <div className="mt-3 flex items-center gap-2 text-xs text-gray-400">
                         <span className="bg-gray-100 px-2 py-0.5 rounded">
-                          {project.tasks.filter(t => t.completed).length}/{project.tasks.length} tareas
+                          {project.tasks.filter(t => t.completed).length}/{project.tasks.length}
                         </span>
                       </div>
                     )}
@@ -264,10 +264,16 @@ export default function KanbanBoard({
             <form onSubmit={handleEditSubmit} className="p-6 space-y-6">
               {/* Título */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Título</label>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-sm font-semibold text-gray-700">Título</label>
+                  <span className={`text-xs ${editingProject.title.length > 100 ? 'text-red-500' : 'text-gray-400'}`}>
+                    {editingProject.title.length}/100
+                  </span>
+                </div>
                 <input 
                   type="text" 
                   required 
+                  maxLength={100}
                   className="w-full bg-white text-gray-900 border border-gray-200 rounded-lg p-3 focus:ring-2 focus:ring-green-500 outline-none text-lg font-medium"
                   value={editingProject.title} 
                   onChange={(e) => setEditingProject({...editingProject, title: e.target.value})} 
@@ -297,9 +303,15 @@ export default function KanbanBoard({
 
               {/* Descripción */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Descripción</label>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-sm font-semibold text-gray-700">Descripción</label>
+                  <span className={`text-xs ${editingProject.description.length > 5000 ? 'text-red-500' : 'text-gray-400'}`}>
+                    {editingProject.description.length}/5000
+                  </span>
+                </div>
                 <textarea 
                   rows={4}
+                  maxLength={5000}
                   className="w-full bg-white text-gray-900 border border-gray-200 rounded-lg p-3 focus:ring-2 focus:ring-green-500 outline-none text-sm"
                   placeholder="Describe tu proyecto, objetivos, funcionalidad..."
                   value={editingProject.description} 
