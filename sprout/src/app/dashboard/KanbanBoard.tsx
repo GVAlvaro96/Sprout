@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -45,23 +45,32 @@ export default function KanbanBoard({
   const [editingProject, setEditingProject] = useState<Project | null>(null)
   const [isCreatingRepo, setIsCreatingRepo] = useState<string | null>(null)
   const [newTaskText, setNewTaskText] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
   
   const router = useRouter()
+
+  const projectsByColumn = useMemo(() => {
+    return COLUMNS.map(col => ({
+      ...col,
+      projects: projects.filter(p => p.status === col.id)
+    }))
+  }, [projects])
+
+  const handleDragStart = useCallback((e: React.DragEvent, projectId: string) => {
+    e.dataTransfer.setData('projectId', projectId)
+    e.dataTransfer.effectAllowed = 'move'
+  }, [])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     router.push('/login')
   }
 
-  const handleDragStart = (e: React.DragEvent, projectId: string) => {
-    e.dataTransfer.setData('projectId', projectId)
-  }
-
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
-  }
+  }, [])
 
-  const handleDrop = async (e: React.DragEvent, newStatus: string) => {
+  const handleDrop = useCallback(async (e: React.DragEvent, newStatus: string) => {
     e.preventDefault()
     const projectId = e.dataTransfer.getData('projectId')
 
@@ -70,7 +79,7 @@ export default function KanbanBoard({
     ))
 
     await supabase.from('projects').update({ status: newStatus }).eq('id', projectId)
-  }
+  }, [])
 
   const handleDelete = async (projectId: string) => {
     if (!window.confirm('¿Seguro que quieres borrar esta idea de Sprout?')) return
@@ -179,19 +188,16 @@ export default function KanbanBoard({
         </div>
       </div>
       
-      <div className="flex gap-6 overflow-x-auto pb-4 snap-x">
-        {COLUMNS.map((col) => {
-          const columnProjects = projects.filter((p) => p.status === col.id)
-
-          return (
-            <div key={col.id} className="min-w-[280px] w-[280px] shrink-0 bg-gray-200/50 rounded-xl p-4 snap-center" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, col.id)}>
-              <h2 className="font-semibold text-gray-700 mb-4 flex justify-between items-center">
-                {col.title}
-                <span className="bg-gray-300 text-gray-700 px-2 py-0.5 rounded-full text-xs font-bold">{columnProjects.length}</span>
-              </h2>
-              
-              <div className="space-y-4 min-h-[100px]">
-                {columnProjects.map((project: Project) => (
+      <div className="flex gap-4 md:gap-6 overflow-x-auto pb-4 snap-x px-4 md:px-8">
+        {projectsByColumn.map((col) => (
+          <div key={col.id} className="min-w-[260px] md:min-w-[280px] w-[260px] md:w-[280px] shrink-0 bg-gray-100/50 md:bg-gray-200/50 rounded-xl p-4 snap-center" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, col.id)}>
+            <h2 className="font-semibold text-gray-700 mb-4 flex justify-between items-center">
+              <span className="truncate">{col.title}</span>
+              <span className="bg-gray-300 text-gray-700 px-2 py-0.5 rounded-full text-xs font-bold shrink-0 ml-2">{col.projects.length}</span>
+            </h2>
+            
+            <div className="space-y-3 md:space-y-4 min-h-[100px]">
+              {col.projects.map((project: Project) => (
                   <div key={project.id} draggable onDragStart={(e) => handleDragStart(e, project.id)} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow group">
                     <div className="flex justify-between items-start mb-2">
                       <h3 className="font-bold text-gray-900 leading-tight">{project.title}</h3>
@@ -231,8 +237,7 @@ export default function KanbanBoard({
                 ))}
               </div>
             </div>
-          )
-        })}
+          ))}
       </div>
 
       {/* MODAL DE EDICIÓN TIPO JIRA */}
