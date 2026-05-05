@@ -3,44 +3,39 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url)
-  // Capturamos el "code" que nos envía GitHub en la URL
+  const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
-  // Capturamos hacia dónde quiere ir el usuario después (por defecto al dashboard)
   const next = searchParams.get('next') ?? '/dashboard'
+
+  // 1. Obtenemos la URL base real (Render o localhost)
+  // Evitamos que use el puerto 10000 interno
+  const origin = process.env.NEXT_PUBLIC_BASE_URL || new URL(request.url).origin
 
   if (code) {
     const cookieStore = await cookies()
-    
-    // Iniciamos Supabase en modo servidor
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
           getAll: () => cookieStore.getAll(),
-          setAll: (cookiesToSet) => {
-            try {
-              cookiesToSet.forEach(({ name, value, options }) => {
-                cookieStore.set(name, value, options)
-              })
-            } catch (error) {
-              // Ignoramos errores si se ejecuta desde un Server Component
-            }
+          setAll: (chunkedCookies) => {
+            chunkedCookies.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            )
           },
         },
       }
     )
-    
-    // ¡Aquí ocurre la magia! Cambiamos el código por una sesión segura
+
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     
     if (!error) {
-      // Si todo va bien, redirigimos limpiamente al dashboard sin el "code" en la URL
+      // 2. Redirección forzada al origen público
       return NextResponse.redirect(`${origin}${next}`)
     }
   }
 
-  // Si algo falla, lo devolvemos al login
-  return NextResponse.redirect(`${origin}/login?error=auth-failed`)
+  // Si algo falla, lo mandamos al login de vuelta al origen correcto
+  return NextResponse.redirect(`${origin}/login?error=auth-code-error`)
 }
